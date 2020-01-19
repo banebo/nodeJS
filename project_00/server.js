@@ -1,6 +1,7 @@
 const util = require('util')
 const express = require('express')
 const jwt = require('jsonwebtoken')
+const fs = require('fs')
 const {conn, query} = require('./database')
 const is_empty = require('is-empty')
 const validator = require('validator')
@@ -86,6 +87,130 @@ app.post('/signup', (req, res) => {
     else
         res.status(500).json(errors)
 
+})
+
+app.post('/login', (req, res) => {
+    const username = req.body.username
+    const password = req.body.password
+    const find_user_q = "SELECT * FROM User u WHERE u.username = ?"
+
+    query(conn, find_user_q, username)
+    .then(data => {
+        if (data.length == 0)
+            throw Error("Invalid credentials")
+        return data[0]
+    })
+    .then(user => {
+        if(!bcrypt.compareSync(password, user.password))
+            throw Error("Invalid credentials")
+        const priv_key = fs.readFileSync('./priv_key', 'utf8')
+        jwt.sign({
+            username, 
+            id: user.idUser
+        }, 
+        priv_key,
+        {
+            expiresIn: 60,
+            algorithm: 'HS256'
+        },
+        (err, token) => {
+            if (err)
+                res.status(500).json(err)
+            else
+                res.status(200).json({
+                    msg: "Login OK",
+                    token
+                })
+        })
+    })
+    .catch(err => {
+        res.status(500).json({
+            msg: "Login failed",
+            error: err
+        })
+    })
+})
+
+const isLogedIn = (req, res, next) => {
+    if (typeof req.headers.authorization !== "undefined"){
+        const token = req.headers.authorization.split(" ")[1]
+        const priv_key = fs.readFileSync('./priv_key', 'utf8')
+        jwt.verify(token, priv_key, {algorithm: 'HS256'}, (err, decoded) => {
+            if (err)
+                res.status(401).json({msg: "Authorization error"})
+            else{
+                req.user = decoded
+                next()
+            }
+        })
+    }
+    else
+        res.status(401).json({msg: "Authorization error"})
+}
+
+app.get('/documents', isLogedIn, (req, res) => {
+    const documents_q = "SELECT * FROM Document d WHERE d.idOwner = ?"
+    query(conn, documents_q, req.user.id)
+    .then(data => {
+        res.status(200).json(data)
+    })
+    .catch(err => {
+        res.status(500).json({error: "Error while fetching documents"})
+    })
+})
+
+const isAuthorized = (req, res, next) => {
+    const q = 'SELECT role_name \
+               FROM Role r, User_has_Role uhr \
+               WHERE uhr.idUser = ? AND uhr.idRole = r.idRole'
+    query(conn, q, req.user.id)
+    .then(roles => {
+        var authorized = false
+        roles.forEach(i => {
+            if (i.role_name == "WRITER")
+                authorized = true
+        });
+        if (!authorized)
+            res.status(401).json({error: "Not authorized"})
+        else
+            next()
+    })
+    .catch(err => {
+        res.status(500).json({error: "Something went wrong"})
+    })
+}
+
+app.post('/documents', isLogedIn, isAuthorized, (req, res) => {
+    const title = !is_empty(req.body.title) ? req.body.title : ""
+    const content = !is_empty(req.body.content) ? req.body.content : ""
+    const idOwner = req.user.id
+
+    if (title == '' && content == '')
+        res.status(500).json({error: "Empty document"})
+
+    const q = "INSERT INTO Document(title, content, idOwner) \
+               VALUES(?, ?, ?)"
+    query(conn, q, [title, content, idOwner])
+    .then(data => {
+        res.status(200).json({msg: "Document saved"})
+    })
+    .catch(err => {
+        res.status(500).json({error: "Failed to save document"})
+    })
+})
+
+app.get('/documents/:id', isLogedIn, (req, res) => {
+    const idDoc = req.params.id
+    const idUser = req.user.id
+    const q = "SELECT * FROM Document d WHERE d.idOwner = ? AND d.idDocument = ?"
+
+    query(conn, q, [idUser, idDoc])
+    .then(data => {
+        res.status(200).json(data)
+    })
+    .catch(err => {
+        res.status(500).json({error: "Error while getting the file"})
+    })
 })
 
 app.listen(port, () => {
