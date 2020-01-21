@@ -6,7 +6,7 @@ const util = require('util')
 const port = 8000
 const app = express()
 
-var data = [
+const data = [
     {
         id: uuid.v4(),
         title: 'TITLE 1',
@@ -76,7 +76,6 @@ app.post('/api/data', (req, res) => {
 
 app.delete('/api/data/:id', (req, res) => {
     const id = req.params.id
-    console.log(`Got id[ ${id} ]`)
     if(!id || id=='')
         res.status(500).json({error: "Invalid id"})
     else{
