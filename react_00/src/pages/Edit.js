@@ -1,6 +1,6 @@
 import React from 'react'
 import axios from 'axios'
-import {Button, Input} from 'reactstrap'
+import {Button, Input, Spinner} from 'reactstrap'
 
 class Edit extends React.Component{
     constructor(props){
@@ -41,6 +41,13 @@ class Edit extends React.Component{
     }
 
     render(){
+        if(!this.state.isLoaded)
+            return(
+                <div>
+                    Loading... <Spinner color='success' size='sm'/>
+                </div>
+            )
+
         return(
             <div>
                 <br />
