@@ -1,12 +1,17 @@
 const express = require('express')
 const bodyParser = require('body-parser')
+const cors = require('cors')
 const uuid = require('uuid')
 const util = require('util')
 
 const port = 8000
 const app = express()
 
-const data = [
+app.use(bodyParser.urlencoded({extended: true}))
+app.use(express.json())
+app.use(cors())
+
+var data = [
     {
         id: uuid.v4(),
         title: 'TITLE 1',
@@ -24,8 +29,6 @@ const data = [
     }
 ]
 
-app.use(bodyParser.urlencoded({extended: true}))
-
 app.get('/api/data', (req, res) => {
     res.status(200).json(data)
 })
@@ -33,30 +36,30 @@ app.get('/api/data', (req, res) => {
 app.get('/api/data/:id', (req, res) => {
     const id = req.params.id
     if (!id || id=='')
-        res.status(500).send()
+        return
     const doc = data.filter(el => el.id == id)
-    res.status(200).json(doc).send()
-})
-
-app.put('/api/data', (req, res) => {
-    title = req.body.title
-    desc = req.body.desc
-
-    if(!(title || desc) || (title=="" && desc==""))
-        res.status(500).json({error: "Empty document"}).send()
-
-    data.push({
-        id: uuid.v4(),
-        title,
-        desc
-    })
-    res.status(200).json({
-        msg: "document added",
-        document: data[data.length-1]
-    })
+    res.status(200).json(doc)
 })
 
 app.post('/api/data', (req, res) => {
+    const document = {
+        title: req.body.title,
+        desc: req.body.desc
+    }
+    if(!(document.title || document.desc) || 
+       (document.title=="" && document.desc==""))
+        return
+
+    document.id = uuid.v4()
+
+    data.push(document)
+    res.json({
+        msg: "document added",
+        document
+    })
+})
+
+app.put('/api/data', (req, res) => {
     const id = req.body.id
     const title = req.body.title
     const desc = req.body.desc
@@ -79,10 +82,7 @@ app.delete('/api/data/:id', (req, res) => {
     if(!id || id=='')
         res.status(500).json({error: "Invalid id"})
     else{
-        data.forEach((el, i) => {
-            if (el.id == id)
-                data.pop(i)
-        })
+        data = data.filter(el => el.id != id)
         res.status(200).json({msg: `Document deleted id: ${id}`})
     }
 })
